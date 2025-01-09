@@ -4,9 +4,94 @@ const Service = require('../Model').services
 const Category = require('../Model').categories
 const User = require('../Model').users
 const otpGenerator = require('otp-generator')
+const Mailsender = require('../Config/EmailConfig/mail')
+
+const exphbs = require("./handlebarsSetup"); // Handlebars setup
+const path = require("path");
+const { readFileSync } = require("fs");
 
 
+exports.generateMultipleBooking = async (req, res) => {
+    try {
+        const { services, fullname, email, phone, address, total } = req.body;
+        console.log("Request Body:", req.body);
 
+        if (!services || services.length < 1) {
+            return res.json({ status: 400, msg: `Invalid order request` });
+        }
+
+        const findAdmin = await User.findOne({ where: { role: 'admin' } });
+        if (!findAdmin) {
+            return res.json({ status: 400, msg: `No Admin available yet to receive your order!...` });
+        }
+
+        const mainuser = req.user || null;
+        const serviceurldata = otpGenerator.generate(20, { specialChars: false });
+        const serviceUrl = `${serviceurldata}`;
+        const newTrack = { track_url: serviceUrl, trackid: serviceurldata, user: mainuser, fullname, email, phone, address, total };
+
+        const tracker = await Tracker.create(newTrack);
+
+        const bookings = await Promise.all(
+            services.map(async (item) => {
+                const dataitem = await Service.findOne({
+                    where: { id: item.service },
+                    include: [
+                        { model: Category, as: 'cart' },
+                    ],
+                });
+
+                const currPrice = dataitem.discountprice || dataitem.currentprice;
+
+                const newBooking = {
+                    trackid: tracker.track_url,
+                    track: tracker.trackid,
+                    time: item.time,
+                    date: item.date,
+                    duration: item.duration,
+                    professional: item.professional,
+                    service: item.service,
+                    discount: item.discount,
+                    currentprice: currPrice,
+                    discountprice: item.discountprice,
+                    price: item.pricing,
+                    title: item.servicename,
+                    category: item.category,
+                    status: `pending`
+                };
+
+                await Booking.create(newBooking);
+                return newBooking; // Return the booking for sending in the response
+            })
+        );
+
+        const sendUser = {
+            fullname: fullname,
+            email: email,
+            address: address,
+            track: tracker.trackid,
+            bookings: bookings,// Include the bookings in the response
+            total: total,  // Include the bookings in the response
+        };
+
+        // Render Handlebars template
+        const templatePath = path.join(__dirname, "views", "emails", "booking.hbs");
+        const emailHtml = await exphbs(templatePath, {
+            fullname,
+            total,
+            bookings, // Pass bookings to the email template if needed
+            trackid: tracker.trackid,
+            year: new Date().getFullYear(),
+        });
+
+        await Mailsender(email, emailHtml, "Your Booking Confirmation");
+
+        return res.json({ status: 200, msg: 'Booking created Successfully!...', order: sendUser });
+    } catch (error) {
+        console.error("Error in generateMultipleBooking:", error);
+        return res.json({ status: 400, msg: `Error: ${error.message}` });
+    }
+};
 exports.generateSingleBooking = async (req, res) => {
     try {
         const { services, link, fullname, email, phone, address, } = req.body
@@ -51,74 +136,6 @@ exports.generateSingleBooking = async (req, res) => {
         return res.json({ status: 400, msg: `Error ${error}` })
     }
 }
-exports.generateMultipleBooking = async (req, res) => {
-    try {
-        const { services, fullname, email, phone, address } = req.body;
-        console.log("Request Body:", req.body);
-
-        if (!services || services.length < 1) {
-            return res.json({ status: 400, msg: `Invalid order request` });
-        }
-
-        const findAdmin = await User.findOne({ where: { role: 'admin' } });
-        if (!findAdmin) {
-            return res.json({ status: 400, msg: `No Admin available yet to receive your order!...` });
-        }
-
-        const mainuser = req.user || null;
-        const serviceurldata = otpGenerator.generate(20, { specialChars: false });
-        const serviceUrl = `${serviceurldata}`;
-        const newTrack = { track_url: serviceUrl, trackid: serviceurldata, user: mainuser, fullname, email, phone, address };
-
-        const tracker = await Tracker.create(newTrack);
-
-        await Promise.all(
-            services.map(async (item) => {
-                const dataitem = await Service.findOne({
-                    where: { id: item.service },
-                    include: [
-                        { model: Category, as: 'cart' },
-                    ],
-                });
-
-                const currPrice = dataitem.discountprice || dataitem.currentprice;
-
-                const newBooking = {
-                    trackid: tracker.track_url,
-                    track: tracker.trackid,
-                    time: item.time,
-                    date: item.date,
-                    duration: item.duration,
-                    professional: item.professional,
-                    service: item.service,
-                    discount: item.discount,
-                    currentprice: currPrice,
-                    discountprice: item.discountprice,
-                    price: item.pricing,
-                    title: item.servicename,
-                    category: item.category,
-                    status: `pending`
-                };
-
-
-                await Booking.create(newBooking);
-            })
-        );
-
-        const sendUser = {
-            fullname: fullname,
-            email: email,
-            address: address,
-            track: tracker.trackid
-        };
-
-        return res.json({ status: 200, msg: 'Booking created Successfully!...', order: sendUser });
-    } catch (error) {
-        console.error("Error in generateMultipleBooking:", error);
-        return res.json({ status: 400, msg: `Error: ${error.message}` });
-    }
-};
-
 exports.VerifyBookingCode = async (req, res) => {
     try {
         const { trackid } = req.body
