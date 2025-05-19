@@ -2,7 +2,10 @@ const User = require('../Model').users
 const Category = require('../Model').categories
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs')
+const moment = require('moment')
 
+const otpGenerator = require('otp-generator')
+const Mailsender = require('../Config/EmailConfig/mail')
 exports.CreateAccount = async (req, res) => {
     try {
         const { firstname, lastname, email, password, confirm_password, phone } = req.body
@@ -14,17 +17,45 @@ exports.CreateAccount = async (req, res) => {
         if (checkAdmin) return res.json({ status: 400, msg: `Email Address already exists!..` })
 
         const pass = password
+        const otpCode = otpGenerator.generate(6, { specialChars: false, lowerCaseAlphabets: false })
+
         const getSalt = await bcrypt.genSaltSync(15)
         const newpass = await bcrypt.hashSync(password, getSalt)
-        const newAdmin = { firstname, lastname, email, phone, pass, password: newpass, role: 'admin' }
+        const newAdmin = { firstname, lastname, email, phone, pass, password: newpass, role: 'admin', code: otpCode, }
         const user = await User.create(newAdmin)
-        const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '0.1d' })
 
-        return res.json({ status: 200, msg: `Session Created Successfully`, token })
+        await Mailsender(email, `This is your OTP Verification code <h1>${otpCode}</h1>`, 'Account Verification OTP')
+        return res.json({ status: 200, msg: `Session Created Successfully`, })
+
     } catch (error) {
         return res.json({ status: 400, msg: `error ${error}` })
     }
 }
+exports.ValidateAccountWithOtp = async (req, res) => {
+    try {
+        const { code, email } = req.body;
+        if (!code) return res.json({ status: 400, msg: `Provide a valid verification code` });
+
+        const user = await User.findOne({ where: { email: email } }); // Ensure correct query syntax
+        if (!user) return res.json({ status: 404, msg: `Invalid Account` });
+
+        // Check if otp exists before accessing its properties
+        if (!user.code) return res.json({ status: 400, msg: `OTP not generated or invalid` });
+
+        // Validate OTP and its expiration
+        if (user.code !== code) return res.json({ status: 400, msg: `Invalid verification code` });
+
+        user.verified = true;
+        user.otp = null; // Clear OTP
+        await user.save();
+
+        const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '5d' });
+
+        return res.json({ status: 200, msg: `Account verified successfully`, token });
+    } catch (error) {
+        return res.json({ status: 400, msg: `Something went wrong`, response: `${error.message}` });
+    }
+};
 
 exports.Login = async (req, res) => {
     try {
@@ -89,7 +120,7 @@ exports.GetPlatformImages = async (req, res) => {
             order: [['createdAt', 'DESC']],
         })
 
-        return res.json({ status: 200, msg: info, categories: items,  })
+        return res.json({ status: 200, msg: info, categories: items, })
     } catch (error) {
         return res.json({ status: 400, msg: `Error ${error}` })
     }

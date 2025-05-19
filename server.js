@@ -20,9 +20,9 @@ app.set('view engine', 'hbs');
 // Middleware setup
 app.use(cors({
     origin: [
-        'http://localhost:5173',
-        'https://finesseoasis.com.ng',
         'http://localhost:5174',
+        'https://finesseoasis.com.ng',
+        'http://http://192.168.0.186:5174',
         'https://oasis-front.netlify.app'
     ]
 }));

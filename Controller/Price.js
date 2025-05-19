@@ -139,22 +139,24 @@ exports.DeletePrice = async (req, res) => {
     }
 }
 
-//section
+//sections
+
 exports.AddNewSection = async (req, res) => {
     try {
         const { title, prices } = req.body;
+        const parsedPrices = prices ? JSON.parse(prices) : []; // Parse prices
 
         const sanitizedTitle = slug(title, '_');
 
-        const findSection = await Section.findOne({ where: { title: sanitizedTitle } });
+        const findSection = await Section.findOne({ where: { title: title } });
         if (findSection) return res.json({ status: 400, msg: `A section with this title already exists` });
 
-        const image = !req.files ? null : req.files.image
+        const image = !req.files ? null : req.files.image;
         if (image && !image.mimetype.startsWith('image/')) {
             return res.json({ status: 400, msg: `Image must be a valid image file` });
         }
 
-        const sectionsPath = './Public/sections'
+        const sectionsPath = './Public/sections';
         if (!fs.existsSync(sectionsPath)) {
             fs.mkdirSync(sectionsPath);
         }
@@ -167,13 +169,13 @@ exports.AddNewSection = async (req, res) => {
         }
 
         const section = await Section.create({
-            title: sanitizedTitle,
+            title: title,
             slug: sanitizedTitle,
             image: fileName,
         });
 
-        if (prices && prices.length > 0) {
-            for (const priceId of prices) {
+        if (parsedPrices && parsedPrices.length > 0) {
+            for (const priceId of parsedPrices) {
                 const findPrice = await Price.findOne({ where: { id: priceId } });
                 if (findPrice) {
                     const findSubSection = await Subsection.findOne({ where: { price: priceId, section: section.id } });
@@ -186,7 +188,7 @@ exports.AddNewSection = async (req, res) => {
 
         return res.json({ status: 200, msg: `Section Created Successfully` });
     } catch (error) {
-        return res.json({ status: 400, msg: `Server error: ${error}` });
+        return res.json({ status: 400, msg: `Server error: ${error.message}` });
     }
 };
 exports.AllSections = async (req, res) => {
