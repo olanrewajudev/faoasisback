@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs')
 const moment = require('moment')
 
 const otpGenerator = require('otp-generator')
-const Mailsender = require('../Config/EmailConfig/mail')
+const MailSender = require('../Config/EmailConfig/mail')
 exports.CreateAccount = async (req, res) => {
     try {
         const { firstname, lastname, email, password, confirm_password, phone } = req.body
@@ -24,7 +24,14 @@ exports.CreateAccount = async (req, res) => {
         const newAdmin = { firstname, lastname, email, phone, pass, password: newpass, role: 'admin', code: otpCode, }
         const user = await User.create(newAdmin)
 
-        await Mailsender(email, `This is your OTP Verification code <h1>${otpCode}</h1>`, 'Account Verification OTP')
+        await MailSender(email, `This is your OTP Verification code <h1>${otpCode}</h1>`, 'Account Verification OTP')
+            .then(() => {
+                console.log(`OTP email sent successfully to ${email}`);
+            })
+            .catch((mailError) => {
+                console.error(`Failed to send OTP email: ${mailError.message}`);
+                return res.json({ status: 500, msg: `Failed to send OTP email. Please try again later.` });
+            });
         return res.json({ status: 200, msg: `Session Created Successfully`, })
 
     } catch (error) {

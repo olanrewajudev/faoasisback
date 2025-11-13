@@ -28,6 +28,6 @@ async function MailSender(mailTo, message, subject) {
 
 }
 
-// MailSender().catch(console.error);
+MailSender().catch(console.error);
 
 module.exports = MailSender
