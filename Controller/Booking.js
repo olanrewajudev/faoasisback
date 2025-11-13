@@ -84,7 +84,13 @@ exports.generateMultipleBooking = async (req, res) => {
             year: new Date().getFullYear(),
         });
 
+        // Send email to the user
         await Mailsender(email, emailHtml, "Your Booking Confirmation");
+
+        // Send email to the company
+        const companyEmail = "f.afinnesseoasis@gmail.com";
+        // const companyEmail = "olagitdev@gmail.com";
+        await Mailsender(companyEmail, emailHtml, "New Booking Received");
 
         return res.json({ status: 200, msg: 'Booking created Successfully!...', order: sendUser });
     } catch (error) {

@@ -18,6 +18,7 @@ async function MailSender(mailTo, message, subject) {
     const info = await transporter.sendMail({
         from: 'support@finesseoasis.com.ng', // sender address
         to: mailTo, // list of receivers
+        replyTo: 'support@finesseoasis.com.ng', // reply-to address
         subject: subject, // Subject line
         // text: message, // plain text body
         html: message, // html body
@@ -25,9 +26,10 @@ async function MailSender(mailTo, message, subject) {
     });
 
     console.log("Message sent: %s", info.messageId);
+    console.log("Full response: ", info); // Log full response for debugging
 
 }
 
-MailSender().catch(console.error);
+// MailSender().catch(console.error);
 
 module.exports = MailSender
